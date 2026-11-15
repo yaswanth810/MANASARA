@@ -1,0 +1,214 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Safe-area insets for iPhone notch / Dynamic Island ─────────────────── */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-top    { padding-top:    env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-left   { padding-left:   env(safe-area-inset-left); }
+  .safe-right  { padding-right:  env(safe-area-inset-right); }
+}
+
+/* ── MANASARA Design Tokens ──────────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* shadcn/ui CSS variables mapped to MANASARA palette */
+    --background: 36 60% 97%;       /* ivory #FBF7F2 */
+    --foreground: 345 12% 23%;      /* plum #403238 */
+
+    --card: 0 0% 100%;              /* white surface */
+    --card-foreground: 345 12% 23%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 345 12% 23%;
+
+    --primary: 345 44% 52%;         /* dusty pink #D98C9E */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 350 44% 94%;       /* blush rose #F6E8EC */
+    --secondary-foreground: 345 12% 23%;
+
+    --muted: 350 25% 92%;           /* soft line adjacent */
+    --muted-foreground: 345 10% 45%;
+
+    --accent: 42 68% 69%;           /* butter yellow #E8C77B */
+    --accent-foreground: 345 12% 23%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 345 20% 88%;          /* soft line #EADFE0 */
+    --input: 345 20% 88%;
+    --ring: 345 44% 52%;            /* dusty pink focus */
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ivory text-plum font-dm-sans antialiased;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  h1, h2, h3 {
+    @apply font-fraunces;
+  }
+
+  /* Respect prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-dusty-pink ring-offset-2 ring-offset-ivory;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-blush text-plum;
+  }
+
+  /* Scrollbar (subtle) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-ivory;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-soft-line rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-dusty-pink/40;
+  }
+}
+
+@layer components {
+  /* ── Typography ─────────────────────────────────────────────────────────── */
+  .editorial-xl {
+    @apply font-fraunces text-4xl sm:text-5xl lg:text-6xl font-medium leading-tight tracking-tight;
+  }
+
+  .editorial-lg {
+    @apply font-fraunces text-3xl sm:text-4xl font-medium leading-tight;
+  }
+
+  .editorial-md {
+    @apply font-fraunces text-2xl sm:text-3xl font-medium;
+  }
+
+  .editorial-sm {
+    @apply font-fraunces text-xl font-medium;
+  }
+
+  .body-lg {
+    @apply font-dm-sans text-base sm:text-lg leading-relaxed;
+  }
+
+  .body-sm {
+    @apply font-dm-sans text-sm leading-relaxed;
+  }
+
+  .label-sm {
+    @apply font-dm-sans text-xs font-medium uppercase tracking-widest;
+  }
+
+  /* ── Button base ────────────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm px-6 py-3 
+           text-sm font-medium font-dm-sans text-white bg-plum
+           hover:bg-plum/90 active:scale-[0.98]
+           transition-all duration-150 ease-out
+           focus-visible:ring-2 focus-visible:ring-plum focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm px-6 py-3
+           text-sm font-medium font-dm-sans text-plum bg-transparent
+           border border-plum/30 hover:border-plum hover:bg-plum/5
+           active:scale-[0.98] transition-all duration-150 ease-out
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm px-6 py-3
+           text-sm font-medium font-dm-sans text-plum bg-dusty-pink
+           hover:bg-dusty-pink/90 active:scale-[0.98]
+           transition-all duration-150 ease-out
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* ── Card ───────────────────────────────────────────────────────────────── */
+  .card-surface {
+    @apply bg-white-surface rounded-sm border border-soft-line;
+  }
+
+  /* ── Input ──────────────────────────────────────────────────────────────── */
+  .input-base {
+    @apply w-full rounded-sm border border-soft-line bg-white-surface px-3 py-2.5
+           text-sm font-dm-sans text-plum placeholder:text-plum/40
+           focus:outline-none focus:ring-2 focus:ring-dusty-pink/50 focus:border-dusty-pink
+           transition-colors duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* ── Badge ──────────────────────────────────────────────────────────────── */
+  .badge-draft {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5
+           text-xs font-medium font-dm-sans
+           bg-butter-yellow/30 text-plum border border-butter-yellow/50;
+  }
+
+  .badge-active {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5
+           text-xs font-medium font-dm-sans
+           bg-muted-leaf/15 text-muted-leaf border border-muted-leaf/30;
+  }
+
+  .badge-error {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5
+           text-xs font-medium font-dm-sans
+           bg-red-50 text-red-700 border border-red-200;
+  }
+
+  /* ── Section spacing ─────────────────────────────────────────────────────── */
+  .section-padding {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-y {
+    @apply py-12 sm:py-16 lg:py-20;
+  }
+
+  /* ── Product card ────────────────────────────────────────────────────────── */
+  .product-card {
+    @apply bg-white-surface rounded-sm border border-soft-line
+           overflow-hidden hover:shadow-md hover:border-dusty-pink/30
+           transition-all duration-200 ease-out;
+  }
+
+  /* ── Announcement strip ──────────────────────────────────────────────────── */
+  .announcement-strip {
+    @apply bg-[#FBF0F3] text-plum/70 text-xs font-dm-sans text-center py-2 px-4 border-b border-[#EADFE0];
+  }
+}

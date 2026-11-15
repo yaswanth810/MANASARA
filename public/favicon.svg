@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- MANASARA abstract mark: looping chenille stem forming a stylised petal/loop -->
+  <circle cx="24" cy="24" r="24" fill="#403238"/>
+  <path
+    d="M24 10 C18 10, 14 15, 16 20 C18 25, 24 24, 24 24 C24 24, 30 23, 32 28 C34 33, 30 38, 24 38"
+    stroke="#F6E8EC"
+    stroke-width="3"
+    stroke-linecap="round"
+    fill="none"
+  />
+  <path
+    d="M24 10 C30 10, 34 15, 32 20 C30 25, 24 24, 24 24"
+    stroke="#D98C9E"
+    stroke-width="2.5"
+    stroke-linecap="round"
+    fill="none"
+  />
+  <!-- Small dot at base -->
+  <circle cx="24" cy="38" r="2.5" fill="#D98C9E"/>
+  <circle cx="24" cy="10" r="2.5" fill="#E8C77B"/>
+</svg>

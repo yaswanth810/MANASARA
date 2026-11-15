@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MANASARA — Upload Diagnostic</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  body { font-family: monospace; max-width: 700px; margin: 40px auto; padding: 20px; background: #f9f9f9; }
+  h1 { color: #403238; }
+  .ok   { color: #16a34a; } /* green */
+  .fail { color: #dc2626; } /* red */
+  .info { color: #2563eb; } /* blue */
+  .step { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin: 12px 0; }
+  .step h3 { margin: 0 0 8px 0; font-size: 14px; color: #403238; }
+  button { background: #D98C9E; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button:hover { background: #c47a8d; }
+  input[type=file] { display: block; margin: 10px 0; padding: 8px; border: 2px dashed #D98C9E; border-radius: 6px; width: 100%; box-sizing: border-box; cursor: pointer; }
+  pre { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; }
+  #log { }
+</style>
+</head>
+<body>
+<h1>🌸 MANASARA — Upload Diagnostic</h1>
+<p>This page tests Supabase storage upload directly. Open it in Chrome (not via dev server).</p>
+
+<div class="step">
+  <h3>Step 1 — Pick an image file</h3>
+  <input type="file" id="fileInput" accept="image/*">
+  <p id="fileStatus" class="info">No file selected</p>
+</div>
+
+<div class="step">
+  <h3>Step 2 — Run diagnostic</h3>
+  <button onclick="runDiagnostic()">▶ Run Diagnostic</button>
+</div>
+
+<div class="step">
+  <h3>Results</h3>
+  <pre id="log">Click "Run Diagnostic" to start...</pre>
+</div>
+
+<script>
+const SUPABASE_URL  = 'https://mcnrarmkuyzyycpuvtec.supabase.co'
+const ANON_KEY      = 'sb_publishable_TdRfKj2RaVWo8yEL-msbzQ_7AS38MgW'
+const PRODUCT_ID    = '22222222-0000-0000-0000-000000000003'
+const BUCKET        = 'product-images'
+
+const { createClient } = supabase
+const client = createClient(SUPABASE_URL, ANON_KEY)
+
+let logEl = document.getElementById('log')
+function log(icon, msg) {
+  logEl.textContent += icon + ' ' + msg + '\n'
+  console.log(icon, msg)
+}
+function clear() { logEl.textContent = '' }
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files?.[0]
+  document.getElementById('fileStatus').textContent = file
+    ? `✅ Selected: ${file.name} (${(file.size/1024).toFixed(1)} KB, ${file.type})`
+    : 'No file selected'
+})
+
+async function runDiagnostic() {
+  clear()
+  log('🔄', 'Starting diagnostic...\n')
+
+  // 1. Check session
+  log('━━━', '1. Auth Session')
+  const { data: { session } } = await client.auth.getSession()
+  if (!session) {
+    log('❌', 'NOT LOGGED IN — no active session found')
+    log('ℹ️ ', 'You must be logged in to the MANASARA admin for storage uploads to work')
+    log('ℹ️ ', 'Go to localhost:3000/admin/login and log in first, then come back here')
+  } else {
+    log('✅', `Logged in as: ${session.user.email}`)
+  }
+
+  // 2. Test storage list (anon)
+  log('\n━━━', '2. Storage — List files in bucket')
+  try {
+    const { data, error } = await client.storage.from(BUCKET).list(PRODUCT_ID)
+    if (error) {
+      log('❌', `List failed: ${error.message}`)
+    } else {
+      log('✅', `Listed files in ${BUCKET}/${PRODUCT_ID}: ${data.length} file(s)`)
+    }
+  } catch (e) {
+    log('❌', `List threw: ${e.message}`)
+  }
+
+  // 3. Test storage upload
+  log('\n━━━', '3. Storage — Upload test')
+  const fileInput = document.getElementById('fileInput')
+  const file = fileInput.files?.[0]
+
+  if (!file) {
+    log('⚠️ ', 'No file selected — select a file first to test upload')
+  } else {
+    log('ℹ️ ', `Uploading: ${file.name} (${file.type})`)
+    const path = `${PRODUCT_ID}/diagnostic_${Date.now()}.${file.name.split('.').pop()}`
+    try {
+      const { data, error } = await client.storage
+        .from(BUCKET)
+        .upload(path, file, { upsert: true, contentType: file.type })
+
+      if (error) {
+        log('❌', `UPLOAD FAILED: ${error.message}`)
+        log('ℹ️ ', `Error status: ${error.statusCode || 'unknown'}`)
+        if (error.message.includes('not found') || error.message.includes('bucket')) {
+          log('⚠️ ', 'FIX: Create bucket "product-images" in Supabase → Storage → New bucket (Public: ON)')
+        } else if (error.message.includes('policy') || error.message.includes('security') || error.message.includes('403') || error.message.includes('Unauthorized')) {
+          log('⚠️ ', 'FIX: Run the storage policy SQL in Supabase SQL Editor (see below)')
+        } else if (!session) {
+          log('⚠️ ', 'FIX: Log in to admin panel first, then retry')
+        }
+      } else {
+        log('✅', `Upload succeeded! Path: ${data.path}`)
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
+        log('✅', `Public URL: ${publicUrl}`)
+
+        // 4. Test DB insert
+        log('\n━━━', '4. Database — Insert into product_images')
+        const { data: dbRow, error: dbErr } = await client
+          .from('product_images')
+          .insert({
+            product_id: PRODUCT_ID,
+            storage_path: path,
+            alt_text: 'diagnostic test',
+            display_order: 999,
+            is_primary: false,
+          })
+          .select()
+          .single()
+
+        if (dbErr) {
+          log('❌', `DB INSERT FAILED: ${dbErr.message} (code: ${dbErr.code})`)
+          log('⚠️ ', 'FIX: Run the product_images policy SQL in Supabase SQL Editor')
+        } else {
+          log('✅', `DB insert succeeded! Row id: ${dbRow.id}`)
+          log('✅', 'FULL UPLOAD PIPELINE WORKS! 🎉')
+          log('ℹ️ ', 'The image is now in Supabase. The issue is likely the file picker in React.')
+
+          // Clean up test record
+          await client.from('product_images').delete().eq('id', dbRow.id)
+          await client.storage.from(BUCKET).remove([path])
+          log('ℹ️ ', 'Test files cleaned up.')
+        }
+      }
+    } catch (e) {
+      log('❌', `Upload threw exception: ${e.message}`)
+    }
+  }
+
+  // 5. Show SQL fixes
+  log('\n━━━', '5. SQL Fixes — Run these in Supabase SQL Editor if needed')
+  log('\n--', 'Storage policies fix:')
+  log('', `DO $$ DECLARE r RECORD; BEGIN
+  FOR r IN SELECT policyname FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
+  LOOP EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', r.policyname); END LOOP;
+END $$;
+CREATE POLICY "pub_read"    ON storage.objects FOR SELECT    TO public      USING (true);
+CREATE POLICY "auth_insert" ON storage.objects FOR INSERT    TO authenticated WITH CHECK (true);
+CREATE POLICY "auth_update" ON storage.objects FOR UPDATE    TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "auth_delete" ON storage.objects FOR DELETE    TO authenticated USING (true);`)
+  log('\n--', 'product_images table policies fix:')
+  log('', `DO $$ DECLARE r RECORD; BEGIN
+  FOR r IN SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename='product_images'
+  LOOP EXECUTE format('DROP POLICY IF EXISTS %I ON public.product_images', r.policyname); END LOOP;
+END $$;
+ALTER TABLE public.product_images ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "pi_auth_all"  ON public.product_images FOR ALL  TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "pi_anon_read" ON public.product_images FOR SELECT TO anon USING (true);`)
+
+  log('\n🏁', 'Diagnostic complete.')
+}
+</script>
+</body>
+</html>
