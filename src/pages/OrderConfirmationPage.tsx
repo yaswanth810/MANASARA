@@ -111,7 +111,7 @@ export default function OrderConfirmationPage() {
   const { data: storeUpiQrPath } = useStoreSetting<string>('upi_qr_path')
 
   const upiId = state?.upiId ?? storeUpiId ?? 'manasara@upi'
-  const upiQrPath = state?.upiQrPath ?? storeUpiQrPath ?? null
+  const upiQrPath = state?.upiQrPath ?? (storeUpiQrPath || null) ?? null
   const totalPaise = state?.totalPaise ?? null
   const subtotalPaise = state?.subtotalPaise ?? null
   const shippingPaise = state?.shippingPaise ?? null

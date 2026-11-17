@@ -132,8 +132,8 @@ export default function AdminSettingsPage() {
     }
   }
 
-  // Build public URL for existing QR
-  const qrPublicUrl = upiQrPath
+  // Build public URL for existing QR (treat empty string as no QR)
+  const qrPublicUrl = upiQrPath && String(upiQrPath).trim()
     ? supabase.storage.from('store-assets').getPublicUrl(upiQrPath as string).data.publicUrl
     : null
 

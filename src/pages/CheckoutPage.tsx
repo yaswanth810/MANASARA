@@ -159,6 +159,9 @@ export default function CheckoutPage() {
           email: values.email ?? null,
         },
         shipping: {
+          name: values.name,          // used for shipping_name on the order
+          phone: values.phone,         // used for shipping_phone on the order
+          email: values.email ?? null,
           address_line1: values.address_line1,
           address_line2: values.address_line2 ?? null,
           locality: values.locality ?? null,

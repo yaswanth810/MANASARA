@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
   })
 
   // ── Recent orders ────────────────────────────────────────────────────────────
-  const { data: recentOrders, isLoading: loadingOrders } = useQuery({
+  const { data: recentOrders, isLoading: loadingOrders, isError: ordersError, error: ordersQueryError, refetch: refetchOrders } = useQuery({
     queryKey: ['admin', 'dashboard', 'recent-orders'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -290,6 +290,20 @@ export default function AdminDashboardPage() {
               {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-8 w-full" />
               ))}
+            </div>
+          ) : ordersError ? (
+            <div className="py-10 text-center space-y-3">
+              <AlertTriangle className="h-7 w-7 text-red-400 mx-auto" />
+              <p className="text-sm font-medium text-red-700 font-dm-sans">Failed to load orders</p>
+              <p className="text-xs text-red-500 font-mono max-w-sm mx-auto px-4">
+                {(ordersQueryError as Error)?.message ?? 'Unknown error'}
+              </p>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto px-4">
+                If this says "column does not exist", run the SQL migration in Supabase SQL Editor.
+              </p>
+              <button onClick={() => refetchOrders()} className="btn-secondary text-xs inline-flex items-center gap-1.5 mx-auto">
+                Retry
+              </button>
             </div>
           ) : !recentOrders || recentOrders.length === 0 ? (
             <div className="py-12 text-center text-sm text-gray-400">No orders yet.</div>
