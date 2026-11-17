@@ -135,8 +135,28 @@ CREATE POLICY "Users can manage own addresses"
   WITH CHECK (auth.uid() = user_id);
 
 -- ── 5. Customer-linked order RLS (lets signed-in users see their orders) ──────
+-- NOTE: Use auth.email() not (SELECT email FROM auth.users ...) — the latter
+-- causes "permission denied for table users" because authenticated role cannot
+-- directly query the auth schema. auth.email() is the safe Supabase alternative.
 
--- Drop both old and new policy names to avoid conflicts
+-- ── Also add admin read-all policies so admins can see all orders/payments ──
+
+-- Helper function: returns true if the current user is an active admin
+CREATE OR REPLACE FUNCTION public.is_active_admin()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.admin_profiles
+    WHERE user_id = auth.uid() AND is_active = true
+  )
+$$;
+
+-- ── orders ──────────────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "Admins can read all orders" ON public.orders;
+CREATE POLICY "Admins can read all orders"
+  ON public.orders FOR SELECT
+  USING (public.is_active_admin());
+
 DROP POLICY IF EXISTS "Customers can read own orders" ON public.orders;
 DROP POLICY IF EXISTS "orders_customer_select" ON public.orders;
 CREATE POLICY "orders_customer_select"
@@ -148,10 +168,17 @@ CREATE POLICY "orders_customer_select"
       WHERE c.id = orders.customer_id
         AND (
           (p.phone IS NOT NULL AND c.phone = p.phone)
-          OR c.email = (SELECT email FROM auth.users WHERE id = auth.uid())
+          OR c.email = auth.email()
         )
     )
   );
+
+-- ── order_items ──────────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "Admins can read all order items" ON public.order_items;
+CREATE POLICY "Admins can read all order items"
+  ON public.order_items FOR SELECT
+  USING (public.is_active_admin());
 
 DROP POLICY IF EXISTS "Customers can read own order items" ON public.order_items;
 DROP POLICY IF EXISTS "order_items_customer_select" ON public.order_items;
@@ -165,10 +192,17 @@ CREATE POLICY "order_items_customer_select"
       WHERE o.id = order_items.order_id
         AND (
           (p.phone IS NOT NULL AND c.phone = p.phone)
-          OR c.email = (SELECT email FROM auth.users WHERE id = auth.uid())
+          OR c.email = auth.email()
         )
     )
   );
+
+-- ── payments ─────────────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "Admins can read all payments" ON public.payments;
+CREATE POLICY "Admins can read all payments"
+  ON public.payments FOR SELECT
+  USING (public.is_active_admin());
 
 DROP POLICY IF EXISTS "Customers can read own payments" ON public.payments;
 DROP POLICY IF EXISTS "payments_customer_select" ON public.payments;
@@ -182,10 +216,17 @@ CREATE POLICY "payments_customer_select"
       WHERE o.id = payments.order_id
         AND (
           (p.phone IS NOT NULL AND c.phone = p.phone)
-          OR c.email = (SELECT email FROM auth.users WHERE id = auth.uid())
+          OR c.email = auth.email()
         )
     )
   );
+
+-- ── order_status_history ─────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "Admins can read all order status history" ON public.order_status_history;
+CREATE POLICY "Admins can read all order status history"
+  ON public.order_status_history FOR SELECT
+  USING (public.is_active_admin());
 
 DROP POLICY IF EXISTS "Customers can read own order status history" ON public.order_status_history;
 DROP POLICY IF EXISTS "order_status_history_customer_select" ON public.order_status_history;
@@ -199,7 +240,7 @@ CREATE POLICY "order_status_history_customer_select"
       WHERE o.id = order_status_history.order_id
         AND (
           (p.phone IS NOT NULL AND c.phone = p.phone)
-          OR c.email = (SELECT email FROM auth.users WHERE id = auth.uid())
+          OR c.email = auth.email()
         )
     )
   );
@@ -218,14 +259,13 @@ CREATE POLICY "Public can read store assets"
   USING (bucket_id = 'store-assets');
 
 -- Allow admin users to upload/delete store assets
+-- Note: admin_profiles uses user_id column (not id) to link to auth.users
 DROP POLICY IF EXISTS "Admins can upload store assets" ON storage.objects;
 CREATE POLICY "Admins can upload store assets"
   ON storage.objects FOR INSERT
   WITH CHECK (
     bucket_id = 'store-assets'
-    AND EXISTS (
-      SELECT 1 FROM public.admin_profiles WHERE id = auth.uid() AND is_active = true
-    )
+    AND public.is_active_admin()
   );
 
 DROP POLICY IF EXISTS "Admins can update store assets" ON storage.objects;
@@ -233,9 +273,7 @@ CREATE POLICY "Admins can update store assets"
   ON storage.objects FOR UPDATE
   USING (
     bucket_id = 'store-assets'
-    AND EXISTS (
-      SELECT 1 FROM public.admin_profiles WHERE id = auth.uid() AND is_active = true
-    )
+    AND public.is_active_admin()
   );
 
 DROP POLICY IF EXISTS "Admins can delete store assets" ON storage.objects;
@@ -243,7 +281,5 @@ CREATE POLICY "Admins can delete store assets"
   ON storage.objects FOR DELETE
   USING (
     bucket_id = 'store-assets'
-    AND EXISTS (
-      SELECT 1 FROM public.admin_profiles WHERE id = auth.uid() AND is_active = true
-    )
+    AND public.is_active_admin()
   );

@@ -41,9 +41,9 @@ type PaymentStatus =
 
 interface OrderItem {
   id: string
-  product_name: string
+  product_name: string        // mapped from snapshot_product_name in query
   quantity: number
-  unit_price_paise: number
+  unit_price_paise: number    // mapped from snapshot_unit_price_paise in query
   selected_options: Record<string, string> | null
 }
 
@@ -161,25 +161,40 @@ function MyOrdersTab() {
   const { data: orders = [], isLoading, isError } = useQuery({
     queryKey: ['my-orders', user?.id],
     queryFn: async () => {
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('id')
-        .or(`email.eq.${user!.email},phone.eq.${profile?.phone ?? ''}`)
-        .maybeSingle()
-
-      if (!customer) return []
-
-      const { data: orders } = await supabase
+      // Query orders directly — the RLS policy "orders_customer_select" filters
+      // to orders belonging to this user via their profile phone/email.
+      // We do NOT query the customers table (no public RLS policy on it).
+      const { data, error } = await supabase
         .from('orders')
         .select(`
           id, order_code, status, payment_status,
           total_paise, created_at, updated_at,
-          order_items(id, product_name, quantity, unit_price_paise, selected_options)
+          order_items(
+            id,
+            snapshot_product_name,
+            quantity,
+            snapshot_unit_price_paise,
+            snapshot_options
+          )
         `)
-        .eq('customer_id', customer.id)
         .order('created_at', { ascending: false })
 
-      return (orders ?? []) as Order[]
+      if (error) throw error
+
+      // Remap snapshot column names to the interface shape
+      return ((data ?? []) as unknown[]).map((o: unknown) => {
+        const order = o as Record<string, unknown>
+        return {
+          ...order,
+          order_items: ((order.order_items ?? []) as Record<string, unknown>[]).map((i) => ({
+            id: i.id,
+            product_name: i.snapshot_product_name,
+            quantity: i.quantity,
+            unit_price_paise: i.snapshot_unit_price_paise,
+            selected_options: i.snapshot_options ?? null,
+          })),
+        }
+      }) as Order[]
     },
     enabled: !!user,
   })

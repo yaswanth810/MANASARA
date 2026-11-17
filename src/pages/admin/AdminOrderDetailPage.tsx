@@ -22,14 +22,14 @@ export default function AdminOrderDetailPage() {
   const qc = useQueryClient()
   const [verifyOpen, setVerifyOpen] = useState(false)
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, error: orderError } = useQuery({
     queryKey: ['admin-order', id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
         .select(`*, customers(*), order_items(*), payments(*), order_status_history(*)`)
         .eq('id', id!)
-        .single()
+        .maybeSingle()   // maybeSingle returns null instead of throwing on no rows
       if (error) throw error
       return data
     },
@@ -90,6 +90,16 @@ export default function AdminOrderDetailPage() {
   })
 
   if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-dusty-pink" /></div>
+  if (orderError) return (
+    <div className="text-center py-16 space-y-2">
+      <AlertTriangle className="h-8 w-8 text-red-400 mx-auto" />
+      <p className="text-red-700 font-dm-sans text-sm font-medium">Failed to load order</p>
+      <p className="text-xs text-red-500 font-mono">{(orderError as Error).message}</p>
+      <p className="text-xs text-plum/40 font-dm-sans max-w-sm mx-auto mt-2">
+        If this says "permission denied", run the latest SQL migration in Supabase SQL Editor (adds admin read-all policies).
+      </p>
+    </div>
+  )
   if (!order) return <div className="text-center py-16 text-plum/50 font-dm-sans">Order not found.</div>
 
   const customer = order.customers as { name: string; phone: string; email: string | null } | null
