@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Menu, X, Search, Heart } from 'lucide-react'
+import { ShoppingBag, Menu, X, Search, Heart, UserCircle2, LogIn } from 'lucide-react'
 import { useCartStore } from '@/lib/cart-store'
 import { cn } from '@/lib/utils'
 import { ManasaraLogo } from '@/components/brand/ManasaraLogo'
+import { useAuth } from '@/hooks/useAuth'
 
 const navLinks = [
   { label: 'Shop',         to: '/shop' },
@@ -18,6 +19,7 @@ export function SiteHeader() {
   const [searchOpen, setSearchOpen] = useState(false)
   const navigate   = useNavigate()
   const itemCount  = useCartStore((s) => s.items.reduce((n, i) => n + i.quantity, 0))
+  const { user }   = useAuth()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -96,6 +98,25 @@ export function SiteHeader() {
             <Link to="/shop" aria-label="Wishlist" className={iconCls}>
               <Heart className="h-5 w-5" />
             </Link>
+
+            {/* Account */}
+            {user ? (
+              <Link
+                to="/account"
+                aria-label="My Account"
+                className={iconCls}
+              >
+                <UserCircle2 className="h-5 w-5" />
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                aria-label="Sign in"
+                className={iconCls}
+              >
+                <LogIn className="h-5 w-5" />
+              </Link>
+            )}
 
             {/* Cart */}
             <Link
@@ -176,6 +197,27 @@ export function SiteHeader() {
                   <ShoppingBag className="h-4 w-4" />
                   Cart {itemCount > 0 && `(${itemCount})`}
                 </Link>
+              </li>
+              <li>
+                {user ? (
+                  <Link
+                    to="/account"
+                    className="flex items-center gap-2 px-3 py-3 text-sm font-dm-sans text-plum/70 hover:text-plum rounded-xl"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <UserCircle2 className="h-4 w-4" />
+                    My Account
+                  </Link>
+                ) : (
+                  <Link
+                    to="/login"
+                    className="flex items-center gap-2 px-3 py-3 text-sm font-dm-sans text-plum/70 hover:text-plum rounded-xl"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <LogIn className="h-4 w-4" />
+                    Sign In
+                  </Link>
+                )}
               </li>
             </ul>
           </nav>

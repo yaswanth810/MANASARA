@@ -60,8 +60,8 @@ additional_redirect_urls = ["https://localhost:3000", "http://localhost:5173"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
-# No customer-facing sign-up — only admin login
-enable_signup = false
+# Customer sign-up enabled for account/order tracking features
+enable_signup = true
 enable_anonymous_sign_ins = false
 enable_manual_linking = false
 

@@ -4,6 +4,8 @@ import { Toaster } from '@/components/ui/toaster'
 import { StorefrontLayout } from '@/components/layout/StorefrontLayout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { AdminGuard } from '@/components/auth/AdminGuard'
+import { AuthGuard } from '@/components/auth/AuthGuard'
+import { AuthProvider } from '@/components/auth/AuthProvider'
 import { PageSpinner } from '@/components/common/PageSpinner'
 
 // ── Storefront pages (lazy loaded) ────────────────────────────────────────────
@@ -21,6 +23,10 @@ const ShippingPolicyPage = lazy(() => import('@/pages/policies/ShippingPolicyPag
 const CancellationPolicyPage = lazy(() => import('@/pages/policies/CancellationPolicyPage'))
 const PrivacyPolicyPage = lazy(() => import('@/pages/policies/PrivacyPolicyPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
+const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const SignupPage = lazy(() => import('@/pages/SignupPage'))
+const AccountPage = lazy(() => import('@/pages/AccountPage'))
+const AccountOrderDetailPage = lazy(() => import('@/pages/AccountOrderDetailPage'))
 
 // ── Admin pages (lazy loaded) ─────────────────────────────────────────────────
 const AdminLoginPage = lazy(() => import('@/pages/admin/AdminLoginPage'))
@@ -42,7 +48,7 @@ const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage'))
 
 export default function App() {
   return (
-    <>
+    <AuthProvider>
       <Suspense fallback={<PageSpinner />}>
         <Routes>
           {/* ── Storefront ─────────────────────────────────────────────── */}
@@ -60,6 +66,10 @@ export default function App() {
             <Route path="/policies/shipping" element={<ShippingPolicyPage />} />
             <Route path="/policies/cancellations" element={<CancellationPolicyPage />} />
             <Route path="/policies/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/account" element={<AuthGuard><AccountPage /></AuthGuard>} />
+            <Route path="/account/orders/:orderCode" element={<AuthGuard><AccountOrderDetailPage /></AuthGuard>} />
           </Route>
 
           {/* ── Admin auth ─────────────────────────────────────────────── */}
@@ -98,6 +108,6 @@ export default function App() {
         </Routes>
       </Suspense>
       <Toaster />
-    </>
+    </AuthProvider>
   )
 }
