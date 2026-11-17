@@ -190,6 +190,8 @@ export default function CheckoutPage() {
       const result = (await response.json()) as {
         orderCode: string
         totalPaise: number
+        subtotalPaise: number
+        shippingPaise: number
         upiId: string
         upiQrPath: string | null
       }
@@ -200,9 +202,13 @@ export default function CheckoutPage() {
         state: {
           orderCode: result.orderCode,
           totalPaise: result.totalPaise,
+          subtotalPaise: result.subtotalPaise,
+          shippingPaise: result.shippingPaise,
           upiId: result.upiId,
           upiQrPath: result.upiQrPath,
           customerPhone: values.phone,
+          customerName: values.name,
+          items: items,
         },
         replace: true,
       })

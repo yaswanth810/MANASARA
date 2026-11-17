@@ -330,7 +330,13 @@ export default function ProductPage() {
     for (const opt of product.options ?? []) {
       if (opt.required) {
         const val = selectedOptions[opt.key]
-        if (val === undefined || val === '' || val === null) {
+        if (val === undefined || val === null) {
+          errors[opt.key] = true
+          hasError = true
+        } else if (val === '' || val === false) {
+          errors[opt.key] = true
+          hasError = true
+        } else if (opt.type === 'text' && typeof val === 'string' && val.trim() === '') {
           errors[opt.key] = true
           hasError = true
         }
@@ -471,6 +477,39 @@ export default function ProductPage() {
                 </span>
               )}
             </div>
+
+            {/* Price breakdown — shown when option adjustments are active */}
+            {totalPricePaise !== product.price_paise && (() => {
+              const adjustments: { label: string; paise: number }[] = []
+              for (const opt of product.options ?? []) {
+                if (opt.type === 'select' && opt.choices) {
+                  const selectedVal = selectedOptions[opt.key]
+                  const choice = opt.choices.find((c) => c.value === selectedVal)
+                  if (choice?.price_adjustment_paise && choice.price_adjustment_paise > 0) {
+                    adjustments.push({ label: opt.label, paise: choice.price_adjustment_paise })
+                  }
+                }
+              }
+              if (adjustments.length === 0) return null
+              return (
+                <div className="rounded-xl bg-blush/40 border border-soft-line px-4 py-3 space-y-1 font-dm-sans text-xs text-plum/70">
+                  <div className="flex justify-between">
+                    <span>Base price</span>
+                    <span>{formatINR(product.price_paise)}</span>
+                  </div>
+                  {adjustments.map((adj) => (
+                    <div key={adj.label} className="flex justify-between text-muted-leaf">
+                      <span>+ {adj.label}</span>
+                      <span>+{formatINR(adj.paise)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between font-semibold text-plum border-t border-soft-line pt-1 mt-1">
+                    <span>Total</span>
+                    <span>{formatINR(totalPricePaise)}</span>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Lead time */}
             <div className="flex items-center gap-2 text-sm text-muted-leaf font-dm-sans">

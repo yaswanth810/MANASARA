@@ -1,6 +1,7 @@
 // MANASARA Edge Function: submit-payment-reference
-// Customer submits UTR after paying via UPI.
-// This sets payment status to SUBMITTED — NOT confirmed.
+// Public (no auth required). Called by OrderConfirmationPage when a customer
+// submits their UPI UTR reference after completing payment.
+// Sets payment status to SUBMITTED — not confirmed until admin verifies.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, error } from '../_shared/cors.ts'
@@ -9,73 +10,138 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return error('Method not allowed', 405)
 
-  const sb = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  )
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceKey  = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const sb          = createClient(supabaseUrl, serviceKey)
 
-  let body: { order_code: string; phone: string; utr_reference: string; payment_note?: string }
+  // ── Parse body ────────────────────────────────────────────────────────────
+  let body: {
+    order_code: string
+    phone: string
+    utr_reference: string
+    submitted_amount_paise?: number
+    payment_note?: string
+  }
   try { body = await req.json() } catch { return error('Invalid JSON') }
 
-  const { order_code, phone, utr_reference, payment_note } = body
+  // ── Validate & normalise inputs ───────────────────────────────────────────
 
-  // Validate inputs
-  if (!order_code?.trim()) return error('Order code required')
-  if (!phone?.trim()) return error('Phone number required')
-  if (!utr_reference?.trim() || utr_reference.trim().length < 6) return error('Valid payment reference (UTR) required')
+  // order_code: required, trim, uppercase
+  const orderCode = (body.order_code ?? '').toString().trim().toUpperCase()
+  if (!orderCode) return error('order_code is required')
 
-  const phoneClean = phone.replace(/[^0-9]/g, '').replace(/^91/, '')
-  if (!/^[6-9][0-9]{9}$/.test(phoneClean)) return error('Invalid phone number')
-
-  // Look up order
-  const { data: order } = await sb
-    .from('orders')
-    .select('id, payment_status, customer_id')
-    .eq('order_code', order_code.trim().toUpperCase())
-    .single()
-
-  if (!order) return error('Order not found')
-
-  // Verify phone matches customer
-  const { data: customer } = await sb
-    .from('customers')
-    .select('phone')
-    .eq('id', order.customer_id)
-    .single()
-
-  if (!customer || customer.phone !== phoneClean) return error('Order not found')
-
-  // Check payment status allows submission
-  if (!['PENDING', 'SUBMITTED'].includes(order.payment_status)) {
-    return error(`Payment cannot be submitted in status: ${order.payment_status}`)
+  // phone: required, normalise to 10 digits (strip +91, country code, spaces)
+  const rawPhone = (body.phone ?? '').toString().replace(/\s+/g, '').replace(/^(\+91|91)/, '')
+  if (!rawPhone || !/^\d{10}$/.test(rawPhone)) {
+    return error('A valid 10-digit phone number is required')
   }
 
-  // Rate limit: max 3 UTR submissions per order
+  // utr_reference: required, 8–64 chars, alphanumeric + hyphens only
+  const utrRaw = (body.utr_reference ?? '').toString().trim()
+  if (!utrRaw) return error('utr_reference is required')
+  if (utrRaw.length < 8)  return error('utr_reference must be at least 8 characters')
+  if (utrRaw.length > 64) return error('utr_reference must be at most 64 characters')
+  if (!/^[A-Za-z0-9\-]+$/.test(utrRaw)) {
+    return error('utr_reference must contain only alphanumeric characters and hyphens')
+  }
+  const utrReference = utrRaw.toUpperCase()
+
+  // submitted_amount_paise: optional, must be positive number
+  if (
+    body.submitted_amount_paise !== undefined &&
+    (typeof body.submitted_amount_paise !== 'number' || body.submitted_amount_paise <= 0)
+  ) return error('submitted_amount_paise must be a positive number')
+
+  // payment_note: optional, max 500 chars
+  const paymentNote = body.payment_note !== undefined
+    ? (body.payment_note ?? '').toString()
+    : undefined
+  if (paymentNote !== undefined && paymentNote.length > 500) {
+    return error('payment_note must be at most 500 characters')
+  }
+
+  // ── Look up order + customer phone (single join) ──────────────────────────
+  const { data: order } = await sb
+    .from('orders')
+    .select('id, status, customer_id, customers(phone)')
+    .eq('order_code', orderCode)
+    .maybeSingle()
+
+  if (!order) return error('Order not found', 404)
+
+  // Verify phone matches the customer's phone on record
+  const customerPhone: string = (order.customers as { phone: string } | null)?.phone ?? ''
+  const normCustomerPhone = customerPhone.replace(/\s+/g, '').replace(/^(\+91|91)/, '')
+  if (normCustomerPhone !== rawPhone) {
+    return error('Phone number does not match the order', 403)
+  }
+
+  // Verify order is in a state that accepts payment submission
+  if (order.status !== 'AWAITING_PAYMENT') {
+    return error(`Order cannot accept payment in its current status: ${order.status}`, 409)
+  }
+
+  // ── Look up payment record (PENDING or REJECTED = allow; SUBMITTED/PAID = block) ──
   const { data: payment } = await sb
     .from('payments')
-    .select('id, status, utr_reference')
+    .select('id, status')
     .eq('order_id', order.id)
-    .single()
+    .in('status', ['PENDING', 'REJECTED', 'SUBMITTED', 'PAID'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  if (!payment) return error('Payment record not found')
-  if (payment.status === 'PAID') return error('Payment already verified')
+  if (!payment) return error('No payment record found for this order', 404)
 
-  // Update payment
+  if (payment.status === 'SUBMITTED') {
+    return error('Payment reference already submitted. Please wait for admin verification.', 409)
+  }
+  if (payment.status === 'PAID') {
+    return error('Payment has already been verified and completed.', 409)
+  }
+  // payment.status is PENDING or REJECTED — allow submission / resubmission
+
+  // ── Prevent duplicate UTR across all orders ───────────────────────────────
+  const { data: duplicateUtr } = await sb
+    .from('payments')
+    .select('id')
+    .eq('utr_reference', utrReference)
+    .neq('id', payment.id)   // allow same record to reuse the same UTR (idempotent resubmit)
+    .limit(1)
+    .maybeSingle()
+
+  if (duplicateUtr) {
+    return error('This UTR reference has already been used for another order.', 409)
+  }
+
+  // ── Build update payload ──────────────────────────────────────────────────
+  const now = new Date().toISOString()
+
+  const updatePayload: Record<string, unknown> = {
+    status:        'SUBMITTED',
+    utr_reference: utrReference,
+    submitted_at:  now,
+    updated_at:    now,
+  }
+
+  if (body.submitted_amount_paise !== undefined) {
+    updatePayload.submitted_amount_paise = body.submitted_amount_paise
+  }
+
+  if (paymentNote !== undefined) {
+    updatePayload.customer_payment_note = paymentNote
+  }
+
+  // ── Persist ───────────────────────────────────────────────────────────────
   const { error: updateErr } = await sb
     .from('payments')
-    .update({
-      utr_reference: utr_reference.trim(),
-      customer_payment_note: payment_note?.trim() || null,
-      submitted_at: new Date().toISOString(),
-      status: 'SUBMITTED',
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', payment.id)
 
-  if (updateErr) return error('Failed to submit payment reference', 500)
+  if (updateErr) {
+    console.error('submit-payment-reference: failed to update payment:', updateErr)
+    return error('Failed to submit payment reference. Please try again.', 500)
+  }
 
-  // Update order payment_status
-  await sb.from('orders').update({ payment_status: 'SUBMITTED', updated_at: new Date().toISOString() }).eq('id', order.id)
-
-  return json({ success: true, message: 'Payment reference submitted. We will verify within 2–4 hours.' })
+  return json({ success: true, message: 'Payment reference submitted successfully' })
 })

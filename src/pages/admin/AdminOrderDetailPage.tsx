@@ -94,7 +94,7 @@ export default function AdminOrderDetailPage() {
 
   const customer = order.customers as { name: string; phone: string; email: string | null } | null
   const items = (order.order_items ?? []) as { id: string; snapshot_product_name: string; snapshot_sku: string; snapshot_unit_price_paise: number; snapshot_options: unknown; quantity: number; line_total_paise: number }[]
-  const payment = ((order.payments ?? []) as { id: string; status: string; amount_expected_paise: number; utr_reference: string | null; submitted_at: string | null; verified_amount_paise: number | null; verified_at: string | null }[])[0]
+  const payment = ((order.payments ?? []) as { id: string; status: string; amount_expected_paise: number; submitted_amount_paise?: number | null; utr_reference: string | null; submitted_at: string | null; verified_amount_paise: number | null; verified_at: string | null; rejection_reason?: string | null }[])[0]
   const history = [...((order.order_status_history ?? []) as { id: string; new_status: string; old_status: string | null; created_at: string; note: string | null; changed_by: string | null }[])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   const nextStatuses = allowedTransitions[order.status as OrderStatus] ?? []
 

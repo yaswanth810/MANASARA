@@ -29,6 +29,7 @@ export type PaymentStatus =
   | 'PAID'
   | 'REFUND_PENDING'
   | 'REFUNDED'
+  | 'REJECTED'
 
 export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED'
 
@@ -335,6 +336,10 @@ export interface Database {
           verified_reference: string | null
           verified_by: string | null          // admin_profiles.id
           verified_at: string | null
+          submitted_amount_paise: number | null
+          rejection_reason: string | null
+          rejected_at: string | null
+          rejected_by: string | null          // admin_profiles.id
           created_at: string
           updated_at: string
         }
@@ -364,6 +369,10 @@ export interface Database {
           verified_reference?: string | null
           verified_by?: string | null
           verified_at?: string | null
+          submitted_amount_paise?: number | null
+          rejection_reason?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
           updated_at?: string
         }
       }
