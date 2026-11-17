@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Plus, Trash2, Save } from 'lucide-react'
+import { Loader2, Plus, Trash2, Save, Upload, CheckCircle, XCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isValidPincode } from '@/lib/utils'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
@@ -8,7 +8,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth'
 type SettingKey =
   | 'store_name' | 'announcement_text' | 'announcement_visible'
   | 'upi_id' | 'contact_email' | 'instagram_url'
-  | 'default_shipping_rate_paise'
+  | 'default_shipping_rate_paise' | 'upi_qr_path'
 
 function useSettingValue(key: SettingKey) {
   return useQuery({
@@ -93,6 +93,49 @@ export default function AdminSettingsPage() {
 
   // UPI
   const { data: upiId } = useSettingValue('upi_id')
+  const { data: upiQrPath, refetch: refetchQrPath } = useSettingValue('upi_qr_path')
+
+  // QR upload state
+  const qrFileRef = useRef<HTMLInputElement>(null)
+  const [qrUploading, setQrUploading] = useState(false)
+  const [qrUploadStatus, setQrUploadStatus] = useState<'idle' | 'success' | 'error'>('idle')
+
+  async function handleQrUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setQrUploadStatus('error')
+      return
+    }
+    setQrUploading(true)
+    setQrUploadStatus('idle')
+    try {
+      const ext = file.name.split('.').pop() ?? 'png'
+      const path = `upi-qr/upi_qr.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('store-assets')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (uploadError) throw uploadError
+      await supabase.from('store_settings').upsert(
+        { key: 'upi_qr_path', value: path, updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      )
+      await refetchQrPath()
+      qc.invalidateQueries({ queryKey: ['setting', 'upi_qr_path'] })
+      qc.invalidateQueries({ queryKey: ['store-setting', 'upi_qr_path'] })
+      setQrUploadStatus('success')
+    } catch {
+      setQrUploadStatus('error')
+    } finally {
+      setQrUploading(false)
+      if (qrFileRef.current) qrFileRef.current.value = ''
+    }
+  }
+
+  // Build public URL for existing QR
+  const qrPublicUrl = upiQrPath
+    ? supabase.storage.from('store-assets').getPublicUrl(upiQrPath as string).data.publicUrl
+    : null
 
   // Pincodes
   const { data: pincodes, isLoading: pincodesLoading } = useQuery({
@@ -185,12 +228,66 @@ export default function AdminSettingsPage() {
             <SettingField label="UPI ID (shown to customers after order)" settingKey="upi_id" defaultValue={upiId} saving={saving} onSave={saveSetting} />
             <div>
               <p className="text-sm font-medium text-plum font-dm-sans mb-1.5">UPI QR Code</p>
-              <div className="border-2 border-dashed border-soft-line rounded-sm p-6 text-center">
-                <p className="text-sm text-plum/40 font-dm-sans">
-                  Upload your UPI QR image to the <code>store-assets</code> Supabase Storage bucket
-                  and update the <code>upi_qr_path</code> key in store_settings via the SQL editor.
-                </p>
+
+              {/* Current QR preview */}
+              {qrPublicUrl && (
+                <div className="mb-3 flex items-start gap-4">
+                  <img
+                    src={qrPublicUrl}
+                    alt="UPI QR Code"
+                    className="w-32 h-32 object-contain border border-soft-line rounded-sm bg-white p-1"
+                  />
+                  <div className="text-xs text-plum/50 font-dm-sans pt-1">
+                    <p className="font-medium text-green-600 flex items-center gap-1 mb-1">
+                      <CheckCircle className="h-3.5 w-3.5" /> QR uploaded
+                    </p>
+                    <p>Shown to customers on the payment screen.</p>
+                    <p className="mt-1 break-all text-plum/40">{upiQrPath as string}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Upload area */}
+              <div
+                className="border-2 border-dashed border-soft-line rounded-sm p-5 text-center cursor-pointer hover:border-dusty-pink transition-colors"
+                onClick={() => qrFileRef.current?.click()}
+              >
+                {qrUploading ? (
+                  <div className="flex flex-col items-center gap-2 text-plum/50">
+                    <Loader2 className="h-6 w-6 animate-spin text-dusty-pink" />
+                    <span className="text-sm font-dm-sans">Uploading…</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-plum/50">
+                    <Upload className="h-6 w-6" />
+                    <span className="text-sm font-dm-sans">
+                      {qrPublicUrl ? 'Replace QR image' : 'Upload UPI QR image'}
+                    </span>
+                    <span className="text-xs font-dm-sans text-plum/30">PNG, JPG or SVG · max 2 MB</span>
+                  </div>
+                )}
               </div>
+
+              {/* Status feedback */}
+              {qrUploadStatus === 'success' && (
+                <p className="mt-2 text-xs text-green-600 font-dm-sans flex items-center gap-1">
+                  <CheckCircle className="h-3.5 w-3.5" /> QR image saved successfully.
+                </p>
+              )}
+              {qrUploadStatus === 'error' && (
+                <p className="mt-2 text-xs text-red-600 font-dm-sans flex items-center gap-1">
+                  <XCircle className="h-3.5 w-3.5" /> Upload failed. Please try again with a valid image file.
+                </p>
+              )}
+
+              {/* Hidden file input */}
+              <input
+                ref={qrFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleQrUpload}
+              />
             </div>
           </div>
         </SettingSection>
