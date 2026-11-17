@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Search } from 'lucide-react'
+import { ChevronRight, Search, AlertCircle, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatINR, formatDate, orderStatusLabel, paymentStatusLabel, cn } from '@/lib/utils'
 import type { OrderStatus, PaymentStatus } from '@/lib/database.types'
@@ -29,7 +29,7 @@ export default function AdminOrdersPage() {
   const [paymentFilter, setPaymentFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
 
-  const { data: orders, isLoading } = useQuery({
+  const { data: orders, isLoading, isError, error: queryError, refetch } = useQuery({
     queryKey: ['admin-orders', statusFilter, paymentFilter],
     queryFn: async () => {
       let q = supabase
@@ -45,6 +45,7 @@ export default function AdminOrdersPage() {
       if (error) throw error
       return data
     },
+    refetchInterval: 60_000, // auto-refresh every 60s
   })
 
   const statuses: OrderStatus[] = ['AWAITING_PAYMENT', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']
@@ -67,6 +68,14 @@ export default function AdminOrdersPage() {
           <h1 className="font-fraunces text-2xl font-medium text-plum">Orders</h1>
           <p className="text-sm text-plum/50 font-dm-sans mt-0.5">{orders?.length ?? 0} orders</p>
         </div>
+        <button
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="btn-secondary text-xs flex items-center gap-1.5"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
       {/* Status filter chips */}
@@ -127,6 +136,26 @@ export default function AdminOrdersPage() {
                     ))}
                   </tr>
                 ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <AlertCircle className="h-8 w-8 text-red-400" />
+                      <div>
+                        <p className="font-medium text-red-700 font-dm-sans text-sm">Failed to load orders</p>
+                        <p className="text-xs text-red-500 font-dm-sans mt-1 font-mono max-w-md">
+                          {(queryError as Error)?.message ?? 'Unknown error'}
+                        </p>
+                        <p className="text-xs text-plum/50 font-dm-sans mt-2">
+                          If this says "column does not exist", run migration <code>20241117140000_payments_missing_columns.sql</code> in Supabase SQL Editor.
+                        </p>
+                      </div>
+                      <button onClick={() => refetch()} className="btn-secondary text-xs flex items-center gap-1.5">
+                        <RefreshCw className="h-3.5 w-3.5" /> Retry
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-plum/40 font-dm-sans">No orders found</td>

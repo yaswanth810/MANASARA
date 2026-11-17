@@ -36,15 +36,15 @@ serve(async (req: Request) => {
     return error('A valid 10-digit phone number is required')
   }
 
-  // utr_reference: required, 8–64 chars, alphanumeric + hyphens only
+  // utr_reference: required, 6–64 chars, alphanumeric + hyphens + spaces allowed
   const utrRaw = (body.utr_reference ?? '').toString().trim()
   if (!utrRaw) return error('utr_reference is required')
-  if (utrRaw.length < 8)  return error('utr_reference must be at least 8 characters')
+  if (utrRaw.length < 6)  return error('utr_reference must be at least 6 characters')
   if (utrRaw.length > 64) return error('utr_reference must be at most 64 characters')
-  if (!/^[A-Za-z0-9\-]+$/.test(utrRaw)) {
+  if (!/^[A-Za-z0-9\-\s]+$/.test(utrRaw)) {
     return error('utr_reference must contain only alphanumeric characters and hyphens')
   }
-  const utrReference = utrRaw.toUpperCase()
+  const utrReference = utrRaw.replace(/\s+/g, '').toUpperCase()
 
   // submitted_amount_paise: optional, must be positive number
   if (
@@ -115,13 +115,13 @@ serve(async (req: Request) => {
   }
 
   // ── Build update payload ──────────────────────────────────────────────────
+  // Note: updated_at is handled automatically by a DB trigger; do not set it here.
   const now = new Date().toISOString()
 
   const updatePayload: Record<string, unknown> = {
     status:        'SUBMITTED',
     utr_reference: utrReference,
     submitted_at:  now,
-    updated_at:    now,
   }
 
   if (body.submitted_amount_paise !== undefined) {

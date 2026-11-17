@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { CheckCircle, AlertTriangle, Loader2, ChevronRight, XCircle, RotateCcw } from 'lucide-react'
+import { CheckCircle, AlertTriangle, Loader2, ChevronRight, XCircle, RotateCcw, RefreshCw } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { supabase } from '@/lib/supabase'
 import { formatINR, formatDateTime } from '@/lib/utils'
@@ -58,17 +58,23 @@ export default function AdminPaymentsPage() {
 
   // ── Query ──────────────────────────────────────────────────────────────────
 
-  const { data: payments, isLoading } = useQuery({
+  const { data: payments, isLoading, isError, error: queryError, refetch } = useQuery({
     queryKey: ['admin-payments-queue'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payments')
         .select('*, orders(id, order_code, total_paise, customers(name, phone))')
         .in('status', ['PENDING', 'SUBMITTED', 'REJECTED'])
-        .order('submitted_at', { ascending: true, nullsFirst: false })
+        .order('submitted_at', { ascending: true })
+        .order('created_at', { ascending: true })
       if (error) throw error
-      return data as PaymentRecord[]
+      // Sort client-side: SUBMITTED first, then PENDING, then REJECTED
+      return (data as PaymentRecord[]).sort((a, b) => {
+        const rank = { SUBMITTED: 0, PENDING: 1, REJECTED: 2 }
+        return (rank[a.status as keyof typeof rank] ?? 3) - (rank[b.status as keyof typeof rank] ?? 3)
+      })
     },
+    refetchInterval: 30_000, // auto-refresh every 30s
   })
 
   // ── Verify mutation ────────────────────────────────────────────────────────
@@ -185,11 +191,22 @@ export default function AdminPaymentsPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="font-fraunces text-2xl font-medium text-plum">Payment Queue</h1>
-        <p className="text-sm text-plum/50 font-dm-sans mt-0.5">
-          Payments awaiting verification · includes pending, submitted, and rejected
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-fraunces text-2xl font-medium text-plum">Payment Queue</h1>
+          <p className="text-sm text-plum/50 font-dm-sans mt-0.5">
+            Payments awaiting verification · includes pending, submitted, and rejected
+          </p>
+        </div>
+        <button
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="btn-secondary text-xs flex items-center gap-1.5"
+          title="Refresh (auto-refreshes every 30s)"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
       {/* Warning banner */}
@@ -211,6 +228,24 @@ export default function AdminPaymentsPage() {
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-dusty-pink" />
+        </div>
+      ) : isError ? (
+        <div className="bg-red-50 border border-red-200 rounded-sm p-5">
+          <div className="flex items-start gap-3">
+            <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-red-800 font-dm-sans text-sm">Failed to load payments</p>
+              <p className="text-xs text-red-600 font-dm-sans mt-1 font-mono">
+                {(queryError as Error)?.message ?? 'Unknown error'}
+              </p>
+              <p className="text-xs text-red-500 font-dm-sans mt-2">
+                If this says "column does not exist", run migration <code>20241117140000_payments_missing_columns.sql</code> in Supabase SQL Editor.
+              </p>
+              <button onClick={() => refetch()} className="btn-secondary text-xs mt-3">
+                Retry
+              </button>
+            </div>
+          </div>
         </div>
       ) : (payments ?? []).length === 0 ? (
         <div className="bg-white rounded-sm border border-gray-200 p-10 text-center">

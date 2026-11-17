@@ -106,11 +106,12 @@ export default function OrderConfirmationPage() {
   // May be null if user refreshed the page — handle gracefully.
   const state = location.state as OrderConfirmationState | null
 
-  // Fallback: fetch UPI ID from store settings if not in navigation state
+  // Fallback: fetch UPI ID and QR path from store settings if not in navigation state
   const { data: storeUpiId } = useStoreSetting<string>('upi_id')
+  const { data: storeUpiQrPath } = useStoreSetting<string>('upi_qr_path')
 
   const upiId = state?.upiId ?? storeUpiId ?? 'manasara@upi'
-  const upiQrPath = state?.upiQrPath ?? null
+  const upiQrPath = state?.upiQrPath ?? storeUpiQrPath ?? null
   const totalPaise = state?.totalPaise ?? null
   const subtotalPaise = state?.subtotalPaise ?? null
   const shippingPaise = state?.shippingPaise ?? null
