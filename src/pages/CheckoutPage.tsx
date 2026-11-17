@@ -100,6 +100,10 @@ export default function CheckoutPage() {
   // Stable idempotency key — generated once per checkout session
   const idempotencyKey = useRef<string>(crypto.randomUUID())
 
+  // Prevents the "empty cart → redirect to /shop" effect from firing after a
+  // successful order placement (clearCart() empties the cart before navigation)
+  const orderPlacedRef = useRef(false)
+
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -128,9 +132,9 @@ export default function CheckoutPage() {
   const totalPaise =
     shippingPaise !== null ? subtotalPaise + shippingPaise : null
 
-  // Redirect if cart is empty
+  // Redirect if cart is empty — but NOT after a successful order placement
   useEffect(() => {
-    if (items.length === 0) {
+    if (items.length === 0 && !orderPlacedRef.current) {
       navigate('/shop', { replace: true })
     }
   }, [items.length, navigate])
@@ -196,6 +200,13 @@ export default function CheckoutPage() {
         upiQrPath: string | null
       }
 
+      // Mark order as placed BEFORE clearing cart so the useEffect
+      // redirect guard fires correctly regardless of render timing.
+      orderPlacedRef.current = true
+
+      // Snapshot items before clearing (needed for navigation state)
+      const orderedItems = [...items]
+
       // Clear cart and navigate — pass confirmation data via state
       clearCart()
       navigate(`/order-confirmation/${result.orderCode}`, {
@@ -208,7 +219,7 @@ export default function CheckoutPage() {
           upiQrPath: result.upiQrPath,
           customerPhone: values.phone,
           customerName: values.name,
-          items: items,
+          items: orderedItems,
         },
         replace: true,
       })
@@ -225,7 +236,9 @@ export default function CheckoutPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  if (items.length === 0) return null // redirecting
+  // Keep showing the page while navigating away after a successful order
+  // (orderPlacedRef.current is true during the brief re-render after clearCart)
+  if (items.length === 0 && !orderPlacedRef.current) return null // redirecting to /shop
 
   return (
     <div className="min-h-screen bg-[#FBF7F2]">
